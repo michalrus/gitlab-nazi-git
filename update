@@ -12,7 +12,7 @@ set -o nounset
 
 [ $# -lt 3 ] && { echo >&2 "$0: not meant to be run manually" ; exit 1 ; }
 
-d="$(cd "$(dirname "$0")" ; pwd -P)"
+d="$(dirname "$(readlink -f "$0")")"
 repo_dir="$(pwd)"
 
 project_name="$(basename "$repo_dir" ".git")"
@@ -46,9 +46,9 @@ fi
     commit_msg_file="$(mktemp)"
     git log --format='%B' -n 1 "$rev" >>"$commit_msg_file"
 
-    tmp="$(mktemp)" ; "$d"/commit-msg-issue "$iid"  "$commit_msg_file" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
-    tmp="$(mktemp)" ; "$d"/commit-msg-time-tracking "$commit_msg_file" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
-    tmp="$(mktemp)" ; "$d"/nazi-git/commit-msg      "$commit_msg_file" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
+    tmp="$(mktemp)" ; "$d"/commit-msg-issue "$iid"  "$commit_msg_file" "$project_id" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
+    tmp="$(mktemp)" ; "$d"/commit-msg-time-tracking "$commit_msg_file" "$project_id" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
+    tmp="$(mktemp)" ; "$d"/nazi-git/commit-msg      "$commit_msg_file" "$project_id" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
 
     rm "$commit_msg_file"
 

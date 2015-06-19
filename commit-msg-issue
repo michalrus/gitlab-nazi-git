@@ -8,7 +8,7 @@ ERRS=""
 
 d="$(cd "$(dirname "$0")" ; pwd -P)"
 
-project_id="$(head -n 1 "$d"/project-id | sed -re 's/[^0-9]//g')"
+project_id="$3"
 
 head -n 1 "$2" | grep -qE '([ ,;:/]|^)#'"$1"'([ ,;:/]|$)' || ERRS="$ERRS
 1: must mention \`#$1' somewhere (branch issue number)"

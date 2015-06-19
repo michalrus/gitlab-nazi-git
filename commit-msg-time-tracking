@@ -8,7 +8,7 @@ ERRS=""
 
 d="$(cd "$(dirname "$0")" ; pwd -P)"
 
-project_id="$(head -n 1 "$d"/project-id | sed -re 's/[^0-9]//g')"
+project_id="$2"
 
 r_nick='[A-Za-z0-9._-]+'
 r_separator='[\t :,;]'
