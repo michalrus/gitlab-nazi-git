@@ -13,11 +13,13 @@ set -o nounset
 [ $# -lt 3 ] && { echo >&2 "$0: not meant to be run manually" ; exit 1 ; }
 
 d="$(cd "$(dirname "$0")" ; pwd -P)"
+repo_dir="$(pwd)"
 
-project_id="$(head -n 1 "$d"/project-id | sed -re 's/[^0-9]//g')"
+project_name="$(basename "$repo_dir" ".git")"
+project_namespace="$(basename "$(dirname "$repo_dir")")"
+project_id="$(psql -A -t -d gitlab -c "SELECT p.id FROM projects AS p, namespaces AS n WHERE n.name = '$project_namespace' AND p.namespace_id = n.id AND p.name='$project_name'")"
 
-#echo "$1" "$2" "$3" >"$d/args.$(date --rfc-3339=ns)"
-#exit 1
+[ -n "$project_id" ] || { echo >&2 "[POLICY] no such project: $project_namespace/$project_name" ; exit 1 ; }
 
 # check branch naming
 
