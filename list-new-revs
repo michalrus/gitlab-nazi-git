@@ -10,11 +10,15 @@ ref="$1"
 oldsha="$2"
 newsha="$3"
 
+# if this is a deletion of a branch, exit immediately
 [ "$newsha" = '0000000000000000000000000000000000000000' ] && exit 0
 
-if [ "$oldsha" = '0000000000000000000000000000000000000000' ] ; then
+{
+  # first, exclude commits reachable from the old sha, if there is any
+  [ "$oldsha" = '0000000000000000000000000000000000000000' ] || echo "^$oldsha"
+
+  # then, exclude commits reachable from all already known branches
   git for-each-ref --format '^%(refname:short)' 'refs/heads/'
-  # TODO: what about tags here? :o
-else
-  echo "^$oldsha"
-fi | xargs git rev-list --reverse "$newsha"
+
+  # TODO: what about known tags here? :o
+} | xargs git rev-list --reverse "$newsha"
