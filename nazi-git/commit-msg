@@ -1,0 +1,48 @@
+#!/bin/sh
+
+set -o noclobber
+set -o errexit
+set -o nounset
+
+ERRS=""
+
+d="$(cd "$(dirname "$0")" ; pwd -P)"
+
+[ "$(head -n 1 "$1" | wc -c)" -lt 10 ] && ERRS="$ERRS
+1: must be no shorter than 10 characters"
+
+[ "$(head -n 1 "$1" | wc -c)" -gt 50 ] && ERRS="$ERRS
+1: must be no longer than 50 characters"
+
+head -n 1 "$1" | grep -q '^[A-Z]' || ERRS="$ERRS
+1: must start with a capital letter"
+
+head -n 1 "$1" | grep -q '^#' && ERRS="$ERRS
+1: must not start with a #"
+
+[ '(' "$(cat "$1" | wc -l)" -gt 1 ')' -a '(' -n "$(head -n 2 "$1" | tail -n 1)" ')' ] && ERRS="$ERRS
+2: must be empty"
+
+ERRS="$ERRS
+$(tail -n +3 "$1" | {
+  CNT=3
+  while IFS= read -r LINE ; do
+    [ "$(echo "$LINE" | wc -c)" -gt 72 ] && echo "$CNT: must be no longer than 72 characters"
+    CNT=$((CNT+1))
+  done
+})"
+
+cat "$1" | iconv -f utf8 -t utf8 >/dev/null 2>/dev/null || ERRS="$ERRS
+?: must not contain non-UTF-8 characters"
+
+cat "$1" | grep -q -m 1 $(printf '\r') && ERRS="$ERRS
+?: must not contain CRLF" || true
+
+grep -qFx "$(head -n 1 "$1" | grep -Eio '^\s*\S+(\s|$)' | sed -re 's/\s//g' | sed 's/.*/\U&/')" "$d"/non-imperative.verblist || ERRS="$ERRS
+1: must use imperative mood"
+
+ERRS="$(echo "$ERRS" | { grep -v '^$' || true ; })"
+if [ -n "$ERRS" ] ; then
+  echo "$ERRS" | grep -v '^$'
+  exit 1
+fi

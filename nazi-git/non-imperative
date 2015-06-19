@@ -1,0 +1,8 @@
+#!/bin/sh
+
+verblist="$(readlink -f "$(dirname "$0")")"/non-imperative.verblist
+
+word=$(cat | head -n 1 | grep -Eio '^\s*\S+(\s|$)') || exit 1
+word=$(echo "$word" | sed -re 's/\s//g' | sed 's/.*/\U&/')
+
+grep -qFx "$word" "$verblist"

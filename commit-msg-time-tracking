@@ -1,0 +1,49 @@
+#!/bin/sh
+
+set -o noclobber
+set -o errexit
+set -o nounset
+
+ERRS=""
+
+d="$(cd "$(dirname "$0")" ; pwd -P)"
+
+project_id="$(head -n 1 "$d"/project-id | sed -re 's/[^0-9]//g')"
+
+r_nick='[A-Za-z0-9._-]+'
+r_separator='[\t :,;]'
+r_number='[0-9]+(\.[0-9]+)?'
+r_hours="${r_number}\s*(h|hr|hrs|hour|hours)"
+r_minutes="${r_number}\s*(m|min|mins|minute|minutes)"
+r_time="(${r_hours}|${r_minutes})"
+r_times="${r_time}(${r_separator}*${r_time})*"
+r_late="\(\s*${r_times}\s+[Ll][Aa][Tt][Ee]\s*\)"
+
+cat "$1" | {
+  FAIL=0
+  NUM=0
+  CNT=1
+  while IFS= read -r ln ; do
+    if echo "$ln" | grep -qEi '^Time-tracking:\s' ; then
+      if echo "$ln" | grep -qE "^Time-tracking:\s+@${r_nick}${r_separator}+${r_times}(${r_separator}*${r_late})?\s*\$" ; then
+        handle="$(echo "$ln" | sed -re "s/^Time-tracking:\s+@(${r_nick})${r_separator}.*\$/\1/")"
+        db_handle="$(psql -A -t -d gitlab -c "SELECT users.username FROM users, members WHERE users.id = members.user_id AND members.source_type = 'Project' AND members.source_id = $project_id AND users.username = '$handle' AND users.username <> 'ci-bot'")"
+        if [ "$handle" = "$db_handle" ] ; then
+          NUM=$((NUM+1))
+        else
+          FAIL=1
+          echo "$CNT: invalid \`Time-tracking:' value: no \`@$handle' known in this project"
+        fi
+      else
+        FAIL=1
+        echo "$CNT: invalid \`Time-tracking:' value, use something like \`@yourhandle 2 h 10 min (15 min late)'"
+      fi
+    fi
+    CNT=$((CNT+1))
+  done
+  if [ '(' $FAIL -eq 0 ')' -a '(' $NUM -eq 0 ')' ] ; then
+    echo "?: there should be at least one \`Time-tracking:' entry"
+    FAIL=1
+  fi
+  exit $FAIL
+}

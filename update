@@ -1,0 +1,64 @@
+#!/bin/sh
+
+set -o noclobber
+set -o errexit
+set -o nounset
+
+# don't run the hook for @ci-bot’s actions only
+[ "$GL_ID" = "user-7" ] && exit 0 || true
+
+# don't run the hook for anything other than ssh
+#echo "$GL_ID" | grep -q '^key-' || exit 0
+
+[ $# -lt 3 ] && { echo >&2 "$0: not meant to be run manually" ; exit 1 ; }
+
+d="$(cd "$(dirname "$0")" ; pwd -P)"
+
+project_id="$(head -n 1 "$d"/project-id | sed -re 's/[^0-9]//g')"
+
+#echo "$1" "$2" "$3" >"$d/args.$(date --rfc-3339=ns)"
+#exit 1
+
+# check branch naming
+
+if echo "$1" | grep -q '^refs/heads/' ; then
+  short_ref="$(echo "$1" | sed -re 's/^refs\/heads\///')"
+  [ "$1" != 'refs/heads/master' ]                     || { echo >&2 "[POLICY] branch-name: \`$short_ref': nobody (apart from machines) is allowed to update \`master'"       ; exit 1 ; }
+
+  # always allow branch deletion
+  [ "$3" = "0000000000000000000000000000000000000000" ] && exit 0
+
+  echo "$1" | grep -qE '^refs/heads/#[1-9][0-9]*/.+$' || { echo >&2 "[POLICY] branch-name: \`$short_ref': must be like \`#NNN/anything-really' (#NNN being an issue number)" ; exit 1 ; }
+
+  iid="$(echo "$1" | sed -re 's/^refs\/heads\/#([0-9]+)\/.+$/\1/')"
+  db_iid="$(psql -A -t -d gitlab -c "SELECT iid FROM issues WHERE project_id = $project_id AND iid = $iid AND (state = 'opened' OR state = 'reopened')")"
+  [ "$iid" = "$db_iid" ]                              || { echo >&2 "[POLICY] branch-name: \`$short_ref': #$iid is not an open issue"                                        ; exit 1 ; }
+fi
+
+# check each new revision
+
+"$d"/list-new-revs "$@" | {
+  FAIL=0
+  while IFS= read -r rev ; do
+    short_rev="$(git rev-parse --short "$rev")"
+    commit_msg_file="$(mktemp)"
+    git log --format='%B' -n 1 "$rev" >>"$commit_msg_file"
+
+    tmp="$(mktemp)" ; "$d"/commit-msg-issue "$iid"  "$commit_msg_file" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
+    tmp="$(mktemp)" ; "$d"/commit-msg-time-tracking "$commit_msg_file" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
+    tmp="$(mktemp)" ; "$d"/nazi-git/commit-msg      "$commit_msg_file" >>"$tmp" || FAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] commit-msg: $short_rev: line $ln" ; done ; rm "$tmp"
+
+    rm "$commit_msg_file"
+
+    git show --pretty=format: --name-status "$rev" | {
+      LFAIL=0
+      while IFS= read -r st_name ; do
+        status="$(echo "$st_name" | sed -re 's/^(\S+).*$/\1/')"
+        name="$(  echo "$st_name" | sed -re 's/^\S+\s*(.*)$/\1/')"
+        tmp="$(mktemp)" ; "$d"/nazi-git/file-check "$rev" "$status" "$name" >>"$tmp" || LFAIL=1 ; cat "$tmp" | while IFS= read -r ln ; do echo >&2 "[POLICY] file-check: $short_rev: \`$name': $ln" ; done ; rm "$tmp"
+      done
+      exit $LFAIL
+    } || FAIL=1
+  done
+  exit $FAIL
+}

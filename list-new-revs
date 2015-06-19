@@ -1,0 +1,20 @@
+#!/bin/sh
+
+set -o noclobber
+set -o errexit
+set -o nounset
+
+[ $# -lt 3 ] && { echo >&2 "$0: not meant to be run manually" ; exit 1 ; }
+
+ref="$1"
+oldsha="$2"
+newsha="$3"
+
+[ "$newsha" = '0000000000000000000000000000000000000000' ] && exit 0
+
+if [ "$oldsha" = '0000000000000000000000000000000000000000' ] ; then
+  git for-each-ref --format '^%(refname:short)' 'refs/heads/'
+  # TODO: what about tags here? :o
+else
+  echo "^$oldsha"
+fi | xargs git rev-list --reverse "$newsha"

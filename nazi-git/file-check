@@ -1,0 +1,43 @@
+#!/bin/sh
+
+set -o noclobber
+set -o errexit
+set -o nounset
+
+[ $# -lt 3 ] && { echo >&2 "$0: not meant to be run manually" ; exit 1 ; }
+
+d="$(cd "$(dirname "$0")" ; pwd -P)"
+
+rev="$1"
+status="$2"
+file="$3"
+
+RET=0
+
+echo "$3" | grep -Eqif "$d"/file-check.should-be-extracted  && { echo 'must be extracted' ; RET=1  ; } || true
+echo "$3" | grep -Eqif "$d"/file-check.should-be-gitignored && { echo 'must be gitignored' ; RET=1 ; } || true
+
+git cat-file blob "$1:$3" | file - | grep -Eqif "$d"/file-check.should-be-extracted.magic  && { echo 'must be extracted'  ; RET=1 ; } || true
+git cat-file blob "$1:$3" | file - | grep -Eqif "$d"/file-check.should-be-gitignored.magic && { echo 'must be gitignored' ; RET=1 ; } || true
+
+if [ $RET -eq 0 ] ; then
+  echo "$file" | grep -Ei '\.(mov|avi|mp4|wmv|pdb|dll|exe|png|ico|icns|gif|jpg|mwb|zip|tgz|gz|bz2|7z|rar|swf|fla|jar|mo|ttf|foo|mp3|icc|pdf|bmp|wmf|svg|otf|ttf)$' >/dev/null \
+    && is_binary=1 || is_binary=
+
+  if [ ! $is_binary ] ; then
+    git cat-file blob "$1:$3" | grep -m 1 $(printf '\r') >/dev/null && { echo 'must not contain CRLF' ; RET=1 ; } || true
+    git cat-file blob "$1:$3" | iconv -f utf8 -t utf8 >/dev/null 2>/dev/null || { echo 'must not contain non-UTF-8 characters' ; RET=1 ; }
+  fi
+
+  is_xml=''
+  [ $is_xml ] || echo "$3" | grep -Eqi '\.(xml|bmml)$' >/dev/null     && is_xml='1' || true
+  [ $is_xml ] || git cat-file blob "$1:$3" | file - | grep -Eqi "XML" && is_xml='1' || true
+
+  if [ $is_xml ] ; then
+    pre="$(git cat-file blob "$1:$3" | md5sum)"
+    post="$(git cat-file blob "$1:$3" | xmllint --format - 2>/dev/null | md5sum)"
+    [ "$pre" = "$post" ] || { echo 'must be formatted XML'  ; RET=1 ; }
+  fi
+fi
+
+exit $RET
