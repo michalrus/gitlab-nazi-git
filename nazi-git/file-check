@@ -12,6 +12,9 @@ rev="$1"
 status="$2"
 file="$3"
 
+# allow all deletions
+[ "$status" = "D" ] && exit 0 || true
+
 RET=0
 
 echo "$3" | grep -Eqif "$d"/file-check.should-be-extracted  && { echo 'must be extracted' ; RET=1  ; } || true
